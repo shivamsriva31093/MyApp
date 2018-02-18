@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/home"
+        android:icon="@drawable/ic_account_circle_black_24dp"
+        android:title="@string/bottom_home" />
+
+    <item
+        android:id="@+id/request_img"
+        android:icon="@drawable/ic_tv_black_24dp"
+        android:title="@string/bottom_main_page" />
+
+    <item
+        android:id="@+id/utilities"
+        android:icon="@drawable/ic_explore_black_24dp"
+        android:title="@string/bottom_explore" />
+</menu>
