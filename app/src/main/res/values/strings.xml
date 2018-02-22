@@ -35,4 +35,5 @@
     <string name="details_close">CLOSE</string>
     <string name="details_details">DETAILS</string>
     <string name="initializing_faker">Initializing Faker...</string>
+    <string name="autocomplete_hint">Search places to find events</string>
 </resources>

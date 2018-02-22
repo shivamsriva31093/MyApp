@@ -38,6 +38,7 @@ dependencies {
 //    implementation 'com.github.armcha:SpaceNavigationView:1.6.0'
     implementation "com.google.android.gms:play-services-maps:$maps_version"
     implementation "com.google.android.gms:play-services-location:$maps_version"
+    implementation "com.google.android.gms:play-services-places:$maps_version"
     implementation "com.jakewharton:butterknife:$butter_knife_version"
     annotationProcessor "com.jakewharton:butterknife-compiler:$butter_knife_version"
     implementation "com.github.ittianyu:BottomNavigationViewEx:$bottom_navex_version"

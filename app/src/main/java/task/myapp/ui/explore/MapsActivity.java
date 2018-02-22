@@ -11,6 +11,8 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.BottomSheetBehavior;
 import android.support.v7.widget.CardView;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.AutoCompleteTextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.api.ApiException;
@@ -26,13 +28,23 @@ import com.google.android.gms.location.LocationSettingsResponse;
 import com.google.android.gms.location.LocationSettingsStates;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
 import com.google.android.gms.location.SettingsClient;
+import com.google.android.gms.location.places.AutocompletePrediction;
+import com.google.android.gms.location.places.GeoDataClient;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.PlaceBufferResponse;
+import com.google.android.gms.location.places.Places;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.RuntimeRemoteException;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.ramotion.garlandview.TailLayoutManager;
 import com.ramotion.garlandview.TailRecyclerView;
 import com.ramotion.garlandview.TailSnapHelper;
@@ -63,6 +75,8 @@ import task.myapp.ui.explore.inner.InnerData;
 import task.myapp.ui.explore.inner.InnerItem;
 import task.myapp.ui.explore.outer.OuterAdapter;
 import task.myapp.ui.explore.outer.OuterItem;
+import task.myapp.ui.homepage.PlacesAutocompleteAdapter;
+import task.myapp.widgets.BadgedBottomNavigationView;
 
 import static task.myapp.Config.RC_LOCATION;
 import static task.myapp.utils.LogUtils.LOGD;
@@ -81,8 +95,17 @@ public class MapsActivity extends BaseFragmentActivity implements OnMapReadyCall
     private static final int REQUEST_CHECK_SETTINGS = 29;
     private final static int OUTER_COUNT = 10;
     private final static int INNER_COUNT = 20;
+    private static final LatLngBounds BOUNDS_INDIA = new LatLngBounds(new LatLng(23.63936, 68.14712), new LatLng(28.20453, 97.34466));
+    protected GeoDataClient mGeoDataClient;
     @BindView(R.id.bottomsheet_container)
     CardView bottomSheetLayout;
+    @BindView(R.id.autocomplete_places)
+    AutoCompleteTextView mAutocompleteView;
+    @BindView(R.id.bottom_navigation)
+    BadgedBottomNavigationView navigationView;
+    private PlacesAutocompleteAdapter mAdapter;
+
+
     private int currentBottomSheetBehaviour;
     private BottomSheetBehavior mBottomSheetBehavior;
     private LocationRequest mLocationRequest;
@@ -151,12 +174,88 @@ public class MapsActivity extends BaseFragmentActivity implements OnMapReadyCall
         setContentView(R.layout.activity_maps);
         ButterKnife.bind(this);
         mFusedLocationProviderClient = new FusedLocationProviderClient(this);
+        mGeoDataClient = Places.getGeoDataClient(this, null);
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
+        initAutoCompleteTextview();
         initBottomSheet();
+
+    }
+
+    private void initAutoCompleteTextview() {
+        mAutocompleteView.setOnItemClickListener(mAutocompleteClickListener);
+        mAdapter = new PlacesAutocompleteAdapter(this, mGeoDataClient, BOUNDS_INDIA, null);
+        mAutocompleteView.setAdapter(mAdapter);
+    }
+    private AdapterView.OnItemClickListener mAutocompleteClickListener
+            = new AdapterView.OnItemClickListener() {
+        @Override
+        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+            /*
+             Retrieve the place ID of the selected item from the Adapter.
+             The adapter stores each Place suggestion in a AutocompletePrediction from which we
+             read the place ID and title.
+              */
+            final AutocompletePrediction item = mAdapter.getItem(position);
+            final String placeId = item.getPlaceId();
+            final CharSequence primaryText = item.getPrimaryText(null);
+
+            LOGI(TAG, "Autocomplete item selected: " + primaryText);
+
+            /*
+             Issue a request to the Places Geo Data Client to retrieve a Place object with
+             additional details about the place.
+              */
+            Task<PlaceBufferResponse> placeResult = mGeoDataClient.getPlaceById(placeId);
+            placeResult.addOnCompleteListener(mUpdatePlaceDetailsCallback);
+
+            Toast.makeText(getApplicationContext(), "Clicked: " + primaryText,
+                    Toast.LENGTH_SHORT).show();
+            LOGI(TAG, "Called getPlaceById to get Place details for " + placeId);
+        }
+    };
+
+    /**
+     * Callback for results from a Places Geo Data Client query that shows the first place result in
+     * the details view on screen.
+     */
+    private OnCompleteListener<PlaceBufferResponse> mUpdatePlaceDetailsCallback
+            = task -> {
+        try {
+            PlaceBufferResponse places = task.getResult();
+
+            // Get the Place object from the buffer.
+            final Place place = places.get(0);
+
+            // Display the third party attributions if set.
+            final CharSequence thirdPartyAttribution = places.getAttributions();
+
+            LOGI(TAG, "Place details received: " + place.getName());
+            addMarkerToMap(place);
+            places.release();
+        } catch (RuntimeRemoteException e) {
+            // Request did not complete successfully
+            LOGE(TAG, "Place query did not complete.", e);
+            return;
+        }
+    };
+
+    private void addMarkerToMap(Place place) {
+        MarkerOptions markerOptions = new MarkerOptions();
+        markerOptions.position(place.getLatLng())
+                .icon(BitmapDescriptorFactory.defaultMarker())
+                .title(place.getName().toString());
+        mMap.addMarker(markerOptions);
+        CameraPosition cameraPosition = new CameraPosition.Builder()
+                .target(new LatLng(place.getLatLng().latitude, place.getLatLng().longitude))
+                .zoom(15)
+                .bearing(0)
+                .tilt(45)
+                .build();
+        mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
 
     }
 
@@ -329,7 +428,7 @@ public class MapsActivity extends BaseFragmentActivity implements OnMapReadyCall
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-
+        mAutocompleteView.setVisibility(View.VISIBLE);
         /*try {
             // Customise the styling of the base map using a JSON object defined
             // in a raw resource file.
@@ -445,7 +544,7 @@ public class MapsActivity extends BaseFragmentActivity implements OnMapReadyCall
 
     @Override
     public void onBackPressed() {
-        if(mBottomSheetBehavior.getState() == BottomSheetBehavior.STATE_EXPANDED) {
+        if (mBottomSheetBehavior.getState() == BottomSheetBehavior.STATE_EXPANDED) {
             mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
         } else {
             super.onBackPressed();
